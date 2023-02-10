@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/terraform/internal/addrs"
 	"github.com/hashicorp/terraform/internal/lang"
 )
@@ -137,5 +138,133 @@ var checkRuleBlockSchema = &hcl.BodySchema{
 			Name:     "error_message",
 			Required: true,
 		},
+	},
+}
+
+type CheckReportIf rune
+
+const (
+	Any     CheckReportIf = 'A'
+	Success CheckReportIf = 'S'
+	Failure CheckReportIf = 'F'
+)
+
+type Check struct {
+	Name string
+
+	Count   hcl.Expression
+	ForEach hcl.Expression
+
+	ShowIf CheckReportIf
+
+	DataResources []*Resource
+	Asserts       []*CheckRule
+
+	DeclRange hcl.Range
+}
+
+func decodeCheckBlock(block *hcl.Block, override bool) (*Check, hcl.Diagnostics) {
+	var diags hcl.Diagnostics
+
+	check := &Check{
+		Name:      block.Labels[0],
+		DeclRange: block.DefRange,
+		ShowIf:    Any,
+	}
+
+	// TODO(liamcervante): Disable check blocks in override files?
+
+	content, moreDiags := block.Body.Content(checkBlockSchema)
+	diags = append(diags, moreDiags...)
+
+	if !hclsyntax.ValidIdentifier(check.Name) {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Invalid check block name",
+			Detail:   badIdentifierDetail,
+			Subject:  &block.LabelRanges[0],
+		})
+	}
+
+	for _, attr := range content.Attributes {
+		switch attr.Name {
+		case "count":
+			check.Count = attr.Expr
+		case "for_each":
+			check.ForEach = attr.Expr
+		case "report_if":
+			switch hcl.ExprAsKeyword(attr.Expr) {
+			case "success":
+				check.ShowIf = Success
+			case "failure":
+				check.ShowIf = Failure
+			case "any":
+				// do nothing, this was set as the default.
+			default:
+				diags = append(diags, &hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Invalid report_if check value",
+					Detail:   `The "report_if" value for a check block should be one of ["any", "success", "failure"].`,
+					Subject:  &attr.Range,
+				})
+			}
+		default:
+			panic(fmt.Sprintf("unhandled check nested attribute %q", attr.Name))
+		}
+	}
+
+	if check.Count != nil && check.ForEach != nil {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  `Invalid combination of "count" and "for_each"`,
+			Detail:   `The "count" and "for_each" meta-arguments are mutually-exclusive, only one should be used to be explicit about the number of resources to be created.`,
+			Subject:  &content.Attributes["for_each"].NameRange,
+		})
+	}
+
+	for _, block := range content.Blocks {
+		switch block.Type {
+		case "data":
+			data, moreDiags := decodeDataBlock(block, override)
+			diags = append(diags, moreDiags...)
+			if !moreDiags.HasErrors() {
+				// Connect this data block back up to this check block.
+				data.Check = check
+
+				// Finally, save the data block.
+				check.DataResources = append(check.DataResources, data)
+			}
+		case "assert":
+			assert, moreDiags := decodeCheckRuleBlock(block, override)
+			diags = append(diags, moreDiags...)
+			if !moreDiags.HasErrors() {
+				check.Asserts = append(check.Asserts, assert)
+			}
+		default:
+			panic(fmt.Sprintf("unhandled check nested block %q", block.Type))
+		}
+	}
+
+	if len(check.Asserts) == 0 {
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  fmt.Sprintf("Invalid check block %q", check.Name),
+			Detail:   "Check blocks must have at least one assert condition.",
+			Subject:  &check.DeclRange,
+		})
+	}
+
+	return check, diags
+}
+
+var checkBlockSchema = &hcl.BodySchema{
+	Attributes: []hcl.AttributeSchema{
+		{Name: "count"},
+		{Name: "for_each"},
+		{Name: "report_if"},
+	},
+	Blocks: []hcl.BlockHeaderSchema{
+		{Type: "data", LabelNames: []string{"type", "name"}},
+		{Type: "assert"},
 	},
 }

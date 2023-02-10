@@ -37,6 +37,11 @@ type Resource struct {
 	// For all other resource modes, this field is nil.
 	Managed *ManagedResource
 
+	// Check is the check block this resource belongs to. Resources within a
+	// check block can only be referred to from elsewhere within the same check
+	// block.
+	Check *Check
+
 	DeclRange hcl.Range
 	TypeRange hcl.Range
 }
