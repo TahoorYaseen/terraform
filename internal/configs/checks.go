@@ -163,6 +163,10 @@ type Check struct {
 	DeclRange hcl.Range
 }
 
+func (check Check) Addr() addrs.Check {
+	return addrs.Check{Name: check.Name}
+}
+
 func decodeCheckBlock(block *hcl.Block, override bool) (*Check, hcl.Diagnostics) {
 	var diags hcl.Diagnostics
 

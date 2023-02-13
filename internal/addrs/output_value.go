@@ -62,8 +62,8 @@ func (m ModuleInstance) OutputValue(name string) AbsOutputValue {
 	}
 }
 
-func (v AbsOutputValue) Check(t CheckType, i int) Check {
-	return Check{
+func (v AbsOutputValue) Check(t CheckRuleType, i int) CheckRule {
+	return CheckRule{
 		Container: v,
 		Type:      t,
 		Index:     i,

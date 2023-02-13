@@ -105,6 +105,7 @@ func NewModule(primaryFiles, overrideFiles []*File) (*Module, hcl.Diagnostics) {
 		ManagedResources:   map[string]*Resource{},
 		DataResources:      map[string]*Resource{},
 		ProviderMetas:      map[addrs.Provider]*ProviderMeta{},
+		Checks:             map[string]*Check{},
 	}
 
 	// Process the required_providers blocks first, to ensure that all
