@@ -3,6 +3,7 @@ package views
 import (
 	"bytes"
 	"fmt"
+	"github.com/hashicorp/terraform/internal/command/jsonchecks"
 	"strings"
 
 	"github.com/hashicorp/terraform/internal/addrs"
@@ -107,6 +108,7 @@ func (v *OperationHuman) Plan(plan *plans.Plan, schemas *terraform.Schemas) {
 		OutputChanges:         outputs,
 		ResourceChanges:       changed,
 		ResourceDrift:         drift,
+		Checks:                jsonchecks.MarshalForRenderer(plan.Checks),
 		ProviderSchemas:       jsonprovider.MarshalForRenderer(schemas),
 		RelevantAttributes:    attrs,
 	}

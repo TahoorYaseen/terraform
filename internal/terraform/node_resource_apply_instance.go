@@ -2,6 +2,7 @@ package terraform
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform/internal/checks"
 	"log"
 
 	"github.com/hashicorp/terraform/internal/addrs"
@@ -147,20 +148,53 @@ func (n *NodeApplyableResourceInstance) Execute(ctx EvalContext, op walkOperatio
 }
 
 func (n *NodeApplyableResourceInstance) dataResourceExecute(ctx EvalContext) (diags tfdiags.Diagnostics) {
+
+	// If the data source is part of a check block, then it doesn't report
+	// errors in the usual way.
+
+	returnResult := func(diags tfdiags.Diagnostics) tfdiags.Diagnostics {
+		// Default case is to treat the diags as normal.
+		return diags
+	}
+
+	if n.Config.Check != nil {
+		returnResult = func(diags tfdiags.Diagnostics) tfdiags.Diagnostics {
+			conditionIx := -1
+			for ix, data := range n.Config.Check.DataResources {
+				if data.Addr().Equal(n.Config.Addr()) {
+					conditionIx = ix
+				}
+			}
+			if conditionIx < 0 {
+				panic(fmt.Sprintf("data resource %s is not tracked by its containing check block %s", n.Addr, n.Config.Check.Addr()))
+			}
+
+			if diags.HasErrors() {
+				ctx.Checks().ReportCheckResult(n.Config.Check.Addr().Absolute(n.Addr.Module), addrs.CheckDataSource, conditionIx, checks.StatusError)
+			} else {
+				ctx.Checks().ReportCheckResult(n.Config.Check.Addr().Absolute(n.Addr.Module), addrs.CheckDataSource, conditionIx, checks.StatusPass)
+			}
+
+			// For data sources within check blocks, treat the errors as
+			// warnings.
+			return tfdiags.WithErrorsAsWarnings(diags)
+		}
+	}
+
 	_, providerSchema, err := getProvider(ctx, n.ResolvedProvider)
 	diags = diags.Append(err)
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 
 	change, err := n.readDiff(ctx, providerSchema)
 	diags = diags.Append(err)
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 	// Stop early if we don't actually have a diff
 	if change == nil {
-		return diags
+		return returnResult(diags)
 	}
 	if change.Action != plans.Read && change.Action != plans.NoOp {
 		diags = diags.Append(fmt.Errorf("nonsensical planned action %#v for %s; this is a bug in Terraform", change.Action, n.Addr))
@@ -172,7 +206,7 @@ func (n *NodeApplyableResourceInstance) dataResourceExecute(ctx EvalContext) (di
 	state, repeatData, applyDiags := n.applyDataSource(ctx, change)
 	diags = diags.Append(applyDiags)
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 
 	if state != nil {
@@ -183,7 +217,7 @@ func (n *NodeApplyableResourceInstance) dataResourceExecute(ctx EvalContext) (di
 		// extra details like precondition/postcondition checks.
 		diags = diags.Append(n.writeResourceInstanceState(ctx, state, workingState))
 		if diags.HasErrors() {
-			return diags
+			return returnResult(diags)
 		}
 	}
 
@@ -204,7 +238,7 @@ func (n *NodeApplyableResourceInstance) dataResourceExecute(ctx EvalContext) (di
 	)
 	diags = diags.Append(checkDiags)
 
-	return diags
+	return returnResult(diags)
 }
 
 func (n *NodeApplyableResourceInstance) managedResourceExecute(ctx EvalContext) (diags tfdiags.Diagnostics) {

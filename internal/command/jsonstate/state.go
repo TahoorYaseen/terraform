@@ -180,7 +180,7 @@ func Marshal(sf *statefile.File, schemas *terraform.Schemas) ([]byte, error) {
 
 	// output.Checks
 	if sf.State.CheckResults != nil && sf.State.CheckResults.ConfigResults.Len() > 0 {
-		output.Checks = jsonchecks.MarshalCheckStates(sf.State.CheckResults)
+		output.Checks = jsonchecks.Marshal(sf.State.CheckResults)
 	}
 
 	ret, err := json.Marshal(output)

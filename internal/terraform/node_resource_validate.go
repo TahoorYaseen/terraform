@@ -121,7 +121,7 @@ func (n *NodeValidatableResource) validateProvisioner(ctx EvalContext, p *config
 func (n *NodeValidatableResource) evaluateBlock(ctx EvalContext, body hcl.Body, schema *configschema.Block) (cty.Value, hcl.Body, tfdiags.Diagnostics) {
 	keyData, selfAddr := n.stubRepetitionData(n.Config.Count != nil, n.Config.ForEach != nil)
 
-	return ctx.EvaluateBlock(body, schema, selfAddr, keyData)
+	return ctx.EvaluateBlock(body, schema, selfAddr, nil, keyData)
 }
 
 // connectionBlockSupersetSchema is a schema representing the superset of all
@@ -365,7 +365,7 @@ func (n *NodeValidatableResource) validateResource(ctx EvalContext) tfdiags.Diag
 			return diags
 		}
 
-		configVal, _, valDiags := ctx.EvaluateBlock(n.Config.Config, schema, nil, keyData)
+		configVal, _, valDiags := ctx.EvaluateBlock(n.Config.Config, schema, nil, nil, keyData)
 		diags = diags.Append(valDiags)
 		if valDiags.HasErrors() {
 			return diags
@@ -439,7 +439,7 @@ func (n *NodeValidatableResource) validateResource(ctx EvalContext) tfdiags.Diag
 			return diags
 		}
 
-		configVal, _, valDiags := ctx.EvaluateBlock(n.Config.Config, schema, nil, keyData)
+		configVal, _, valDiags := ctx.EvaluateBlock(n.Config.Config, schema, nil, nil, keyData)
 		diags = diags.Append(valDiags)
 		if valDiags.HasErrors() {
 			return diags
@@ -459,13 +459,13 @@ func (n *NodeValidatableResource) validateResource(ctx EvalContext) tfdiags.Diag
 	return diags
 }
 
-func (n *NodeValidatableResource) evaluateExpr(ctx EvalContext, expr hcl.Expression, wantTy cty.Type, self addrs.Referenceable, keyData instances.RepetitionData) (cty.Value, tfdiags.Diagnostics) {
+func (n *NodeValidatableResource) evaluateExpr(ctx EvalContext, expr hcl.Expression, wantTy cty.Type, self addrs.Referenceable, source addrs.Referenceable, keyData instances.RepetitionData) (cty.Value, tfdiags.Diagnostics) {
 	var diags tfdiags.Diagnostics
 
 	refs, refDiags := lang.ReferencesInExpr(expr)
 	diags = diags.Append(refDiags)
 
-	scope := ctx.EvaluationScope(self, keyData)
+	scope := ctx.EvaluationScope(self, source, keyData)
 
 	hclCtx, moreDiags := scope.EvalContext(refs)
 	diags = diags.Append(moreDiags)
@@ -516,18 +516,18 @@ func (n *NodeValidatableResource) validateCheckRules(ctx EvalContext, config *co
 	keyData, selfAddr := n.stubRepetitionData(n.Config.Count != nil, n.Config.ForEach != nil)
 
 	for _, cr := range config.Preconditions {
-		_, conditionDiags := n.evaluateExpr(ctx, cr.Condition, cty.Bool, nil, keyData)
+		_, conditionDiags := n.evaluateExpr(ctx, cr.Condition, cty.Bool, nil, nil, keyData)
 		diags = diags.Append(conditionDiags)
 
-		_, errorMessageDiags := n.evaluateExpr(ctx, cr.ErrorMessage, cty.Bool, nil, keyData)
+		_, errorMessageDiags := n.evaluateExpr(ctx, cr.ErrorMessage, cty.Bool, nil, nil, keyData)
 		diags = diags.Append(errorMessageDiags)
 	}
 
 	for _, cr := range config.Postconditions {
-		_, conditionDiags := n.evaluateExpr(ctx, cr.Condition, cty.Bool, selfAddr, keyData)
+		_, conditionDiags := n.evaluateExpr(ctx, cr.Condition, cty.Bool, selfAddr, nil, keyData)
 		diags = diags.Append(conditionDiags)
 
-		_, errorMessageDiags := n.evaluateExpr(ctx, cr.ErrorMessage, cty.Bool, selfAddr, keyData)
+		_, errorMessageDiags := n.evaluateExpr(ctx, cr.ErrorMessage, cty.Bool, selfAddr, nil, keyData)
 		diags = diags.Append(errorMessageDiags)
 	}
 
@@ -581,7 +581,7 @@ func validateDependsOn(ctx EvalContext, dependsOn []hcl.Traversal) (diags tfdiag
 		// we'll just eval it and count on the fact that our evaluator will
 		// detect references to non-existent objects.
 		if !diags.HasErrors() {
-			scope := ctx.EvaluationScope(nil, EvalDataForNoInstanceKey)
+			scope := ctx.EvaluationScope(nil, nil, EvalDataForNoInstanceKey)
 			if scope != nil { // sometimes nil in tests, due to incomplete mocks
 				_, refDiags = scope.EvalReference(ref, cty.DynamicPseudoType)
 				diags = diags.Append(refDiags)

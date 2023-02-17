@@ -245,7 +245,7 @@ func Marshal(
 
 	// output.Checks
 	if p.Checks != nil && p.Checks.ConfigResults.Len() > 0 {
-		output.Checks = jsonchecks.MarshalCheckStates(p.Checks)
+		output.Checks = jsonchecks.Marshal(p.Checks)
 	}
 
 	// output.PriorState

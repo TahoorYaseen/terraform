@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/terraform/internal/command/jsonchecks"
+	"github.com/hashicorp/terraform/internal/command/jsonformat/checks"
 	"sort"
 	"strings"
 
@@ -27,11 +29,12 @@ const (
 )
 
 type Plan struct {
-	PlanFormatVersion  string                     `json:"plan_format_version"`
-	OutputChanges      map[string]jsonplan.Change `json:"output_changes"`
-	ResourceChanges    []jsonplan.ResourceChange  `json:"resource_changes"`
-	ResourceDrift      []jsonplan.ResourceChange  `json:"resource_drift"`
-	RelevantAttributes []jsonplan.ResourceAttr    `json:"relevant_attributes"`
+	PlanFormatVersion  string                         `json:"plan_format_version"`
+	OutputChanges      map[string]jsonplan.Change     `json:"output_changes"`
+	ResourceChanges    []jsonplan.ResourceChange      `json:"resource_changes"`
+	ResourceDrift      []jsonplan.ResourceChange      `json:"resource_drift"`
+	RelevantAttributes []jsonplan.ResourceAttr        `json:"relevant_attributes"`
+	Checks             []jsonchecks.CheckResultStatic `json:"checks"`
 
 	ProviderFormatVersion string                            `json:"provider_format_version"`
 	ProviderSchemas       map[string]*jsonprovider.Provider `json:"provider_schemas"`
@@ -234,6 +237,24 @@ func (plan Plan) renderHuman(renderer Renderer, mode plans.Mode, opts ...PlanRen
 				renderer.Streams.Stdout.Columns()))
 		}
 	}
+
+	checkResults := renderHumanChecks(plan.Checks)
+	if len(checkResults) > 0 {
+		renderer.Streams.Print("\nChecks:\n")
+		renderer.Streams.Printf("%s\n", checkResults)
+	}
+}
+
+func renderHumanChecks(results []jsonchecks.CheckResultStatic) string {
+	var rendered []string
+
+	for _, result := range results {
+		if result, ok := checks.RenderHuman(result); ok {
+			rendered = append(rendered, result)
+		}
+	}
+
+	return strings.Join(rendered, "\n")
 }
 
 func renderHumanDiffOutputs(renderer Renderer, outputs map[string]computed.Diff) string {

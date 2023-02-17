@@ -6,9 +6,9 @@ import (
 	"github.com/hashicorp/terraform/internal/addrs"
 )
 
-type staticObjectAddr map[string]interface{}
+type StaticObjectAddr map[string]interface{}
 
-func makeStaticObjectAddr(addr addrs.ConfigCheckable) staticObjectAddr {
+func makeStaticObjectAddr(addr addrs.ConfigCheckable) StaticObjectAddr {
 	ret := map[string]interface{}{
 		"to_display": addr.String(),
 	}
@@ -45,6 +45,17 @@ func makeStaticObjectAddr(addr addrs.ConfigCheckable) staticObjectAddr {
 		if !addr.Module.IsRoot() {
 			ret["module"] = addr.Module.String()
 		}
+	case addrs.ConfigCheck:
+		if kind := addr.CheckableKind(); kind != addrs.CheckableCheck {
+			// Something has gone very wrong
+			panic(fmt.Sprintf("%T has CheckableKind %s", addr, kind))
+		}
+
+		ret["kind"] = "check"
+		ret["name"] = addr.Check.Name
+		if !addr.Module.IsRoot() {
+			ret["module"] = addr.Module.String()
+		}
 	default:
 		panic(fmt.Sprintf("unsupported ConfigCheckable implementation %T", addr))
 	}
@@ -52,9 +63,9 @@ func makeStaticObjectAddr(addr addrs.ConfigCheckable) staticObjectAddr {
 	return ret
 }
 
-type dynamicObjectAddr map[string]interface{}
+type DynamicObjectAddr map[string]interface{}
 
-func makeDynamicObjectAddr(addr addrs.Checkable) dynamicObjectAddr {
+func makeDynamicObjectAddr(addr addrs.Checkable) DynamicObjectAddr {
 	ret := map[string]interface{}{
 		"to_display": addr.String(),
 	}
@@ -68,6 +79,10 @@ func makeDynamicObjectAddr(addr addrs.Checkable) dynamicObjectAddr {
 			ret["instance_key"] = addr.Resource.Key
 		}
 	case addrs.AbsOutputValue:
+		if !addr.Module.IsRoot() {
+			ret["module"] = addr.Module.String()
+		}
+	case addrs.AbsCheck:
 		if !addr.Module.IsRoot() {
 			ret["module"] = addr.Module.String()
 		}

@@ -2,6 +2,7 @@ package terraform
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform/internal/checks"
 	"log"
 	"sort"
 
@@ -66,6 +67,39 @@ func (n *NodePlannableResourceInstance) Execute(ctx EvalContext, op walkOperatio
 }
 
 func (n *NodePlannableResourceInstance) dataResourceExecute(ctx EvalContext) (diags tfdiags.Diagnostics) {
+
+	// If the data source is part of a check block, then it doesn't report
+	// errors in the usual way.
+
+	returnResult := func(diags tfdiags.Diagnostics) tfdiags.Diagnostics {
+		// Default case is to treat the diags as normal.
+		return diags
+	}
+
+	if n.Config.Check != nil {
+		returnResult = func(diags tfdiags.Diagnostics) tfdiags.Diagnostics {
+			conditionIx := -1
+			for ix, data := range n.Config.Check.DataResources {
+				if data.Addr().Equal(n.Config.Addr()) {
+					conditionIx = ix
+				}
+			}
+			if conditionIx < 0 {
+				panic(fmt.Sprintf("data resource %s is not tracked by its containing check block %s", n.Addr, n.Config.Check.Addr()))
+			}
+
+			if diags.HasErrors() {
+				ctx.Checks().ReportCheckResult(n.Config.Check.Addr().Absolute(n.Addr.Module), addrs.CheckDataSource, conditionIx, checks.StatusError)
+			} else {
+				ctx.Checks().ReportCheckResult(n.Config.Check.Addr().Absolute(n.Addr.Module), addrs.CheckDataSource, conditionIx, checks.StatusPass)
+			}
+
+			// For data sources within check blocks, treat the errors as
+			// warnings.
+			return tfdiags.WithErrorsAsWarnings(diags)
+		}
+	}
+
 	config := n.Config
 	addr := n.ResourceInstanceAddr()
 
@@ -74,34 +108,34 @@ func (n *NodePlannableResourceInstance) dataResourceExecute(ctx EvalContext) (di
 	_, providerSchema, err := getProvider(ctx, n.ResolvedProvider)
 	diags = diags.Append(err)
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 
 	diags = diags.Append(validateSelfRef(addr.Resource, config.Config, providerSchema))
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 
 	checkRuleSeverity := tfdiags.Error
-	if n.skipPlanChanges || n.preDestroyRefresh {
+	if n.skipPlanChanges || n.preDestroyRefresh || config.Check != nil {
 		checkRuleSeverity = tfdiags.Warning
 	}
 
 	change, state, repeatData, planDiags := n.planDataSource(ctx, checkRuleSeverity, n.skipPlanChanges)
 	diags = diags.Append(planDiags)
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 
 	// write the data source into both the refresh state and the
 	// working state
 	diags = diags.Append(n.writeResourceInstanceState(ctx, state, refreshState))
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 	diags = diags.Append(n.writeResourceInstanceState(ctx, state, workingState))
 	if diags.HasErrors() {
-		return diags
+		return returnResult(diags)
 	}
 
 	diags = diags.Append(n.writeChange(ctx, change, ""))
@@ -118,7 +152,7 @@ func (n *NodePlannableResourceInstance) dataResourceExecute(ctx EvalContext) (di
 	)
 	diags = diags.Append(checkDiags)
 
-	return diags
+	return returnResult(diags)
 }
 
 func (n *NodePlannableResourceInstance) managedResourceExecute(ctx EvalContext) (diags tfdiags.Diagnostics) {

@@ -58,7 +58,7 @@ func evaluateCountExpressionValue(expr hcl.Expression, ctx EvalContext) (cty.Val
 		return nullCount, nil
 	}
 
-	countVal, countDiags := ctx.EvaluateExpr(expr, cty.Number, nil)
+	countVal, countDiags := ctx.EvaluateExpr(expr, cty.Number, nil, nil)
 	diags = diags.Append(countDiags)
 	if diags.HasErrors() {
 		return nullCount, diags

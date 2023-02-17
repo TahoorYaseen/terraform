@@ -78,16 +78,24 @@ func evalCheckRule(typ addrs.CheckRuleType, rule *configs.CheckRule, ctx EvalCon
 	refs = append(refs, moreRefs...)
 
 	var selfReference addrs.Referenceable
-	// Only resource postconditions can refer to self
-	if typ == addrs.ResourcePostcondition {
+	var sourceReference addrs.Referenceable
+	switch typ {
+	// Only resource postconditions can refer to self, and check assertions can
+	// access data blocks defined within the check block.
+	case addrs.ResourcePostcondition:
 		switch s := self.(type) {
 		case addrs.AbsResourceInstance:
 			selfReference = s.Resource
 		default:
 			panic(fmt.Sprintf("Invalid self reference type %t", self))
 		}
+	case addrs.CheckAssertion, addrs.CheckDataSource:
+		switch s := self.(type) {
+		case addrs.AbsCheck:
+			sourceReference = s.CheckAddr
+		}
 	}
-	scope := ctx.EvaluationScope(selfReference, keyData)
+	scope := ctx.EvaluationScope(selfReference, sourceReference, keyData)
 
 	hclCtx, moreDiags := scope.EvalContext(refs)
 	diags = diags.Append(moreDiags)
@@ -152,21 +160,26 @@ func evalCheckRule(typ addrs.CheckRuleType, rule *configs.CheckRule, ctx EvalCon
 		return checkResult{Status: status}, diags
 	}
 
-	errorMessageForDiags := errorMessage
-	if errorMessageForDiags == "" {
-		errorMessageForDiags = "This check failed, but has an invalid error message as described in the other accompanying messages."
+	// Different checkable types have different conventions about how they
+	// report errors. For now, check block assertions don't announce failures
+	// as diagnostics but everything else does.
+	if typ != addrs.CheckAssertion {
+		errorMessageForDiags := errorMessage
+		if errorMessageForDiags == "" {
+			errorMessageForDiags = "This check failed, but has an invalid error message as described in the other accompanying messages."
+		}
+		diags = diags.Append(&hcl.Diagnostic{
+			// The caller gets to choose the severity of this one, because we
+			// treat condition failures as warnings in the presence of
+			// certain special planning options.
+			Severity:    severity,
+			Summary:     fmt.Sprintf("%s failed", typ.Description()),
+			Detail:      errorMessageForDiags,
+			Subject:     rule.Condition.Range().Ptr(),
+			Expression:  rule.Condition,
+			EvalContext: hclCtx,
+		})
 	}
-	diags = diags.Append(&hcl.Diagnostic{
-		// The caller gets to choose the severity of this one, because we
-		// treat condition failures as warnings in the presence of
-		// certain special planning options.
-		Severity:    severity,
-		Summary:     fmt.Sprintf("%s failed", typ.Description()),
-		Detail:      errorMessageForDiags,
-		Subject:     rule.Condition.Range().Ptr(),
-		Expression:  rule.Condition,
-		EvalContext: hclCtx,
-	})
 
 	return checkResult{
 		Status:         status,

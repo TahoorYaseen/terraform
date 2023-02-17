@@ -194,7 +194,7 @@ func TestMarshalCheckStates(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			gotBytes := MarshalCheckStates(test.Input)
+			gotBytes := Marshal(test.Input)
 
 			var got any
 			err := json.Unmarshal(gotBytes, &got)

@@ -206,7 +206,7 @@ func (s *Scope) EvalReference(ref *addrs.Reference, wantType cty.Type) (cty.Valu
 	// We cheat a bit here and just build an EvalContext for our requested
 	// reference with the "self" address overridden, and then pull the "self"
 	// result out of it to return.
-	ctx, ctxDiags := s.evalContext([]*addrs.Reference{ref}, ref.Subject)
+	ctx, ctxDiags := s.evalContext([]*addrs.Reference{ref}, ref.Subject, nil)
 	diags = diags.Append(ctxDiags)
 	val := ctx.Variables["self"]
 	if val == cty.NilVal {
@@ -235,10 +235,10 @@ func (s *Scope) EvalReference(ref *addrs.Reference, wantType cty.Type) (cty.Valu
 // this type offers, but this is here for less common situations where the
 // caller will handle the evaluation calls itself.
 func (s *Scope) EvalContext(refs []*addrs.Reference) (*hcl.EvalContext, tfdiags.Diagnostics) {
-	return s.evalContext(refs, s.SelfAddr)
+	return s.evalContext(refs, s.SelfAddr, s.SourceAddr)
 }
 
-func (s *Scope) evalContext(refs []*addrs.Reference, selfAddr addrs.Referenceable) (*hcl.EvalContext, tfdiags.Diagnostics) {
+func (s *Scope) evalContext(refs []*addrs.Reference, selfAddr addrs.Referenceable, sourceAddr addrs.Referenceable) (*hcl.EvalContext, tfdiags.Diagnostics) {
 	if s == nil {
 		panic("attempt to construct EvalContext for nil Scope")
 	}
@@ -259,7 +259,7 @@ func (s *Scope) evalContext(refs []*addrs.Reference, selfAddr addrs.Referenceabl
 	// First we'll do static validation of the references. This catches things
 	// early that might otherwise not get caught due to unknown values being
 	// present in the scope during planning.
-	staticDiags := s.Data.StaticValidateReferences(refs, selfAddr)
+	staticDiags := s.Data.StaticValidateReferences(refs, selfAddr, sourceAddr)
 	diags = diags.Append(staticDiags)
 	if staticDiags.HasErrors() {
 		return ctx, diags

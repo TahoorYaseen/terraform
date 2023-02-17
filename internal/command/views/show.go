@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform/internal/command/jsonchecks"
 
 	"github.com/hashicorp/terraform/internal/command/arguments"
 	"github.com/hashicorp/terraform/internal/command/jsonformat"
@@ -60,6 +61,7 @@ func (v *ShowHuman) Display(config *configs.Config, plan *plans.Plan, stateFile 
 			OutputChanges:         outputs,
 			ResourceChanges:       changed,
 			ResourceDrift:         drift,
+			Checks:                jsonchecks.MarshalForRenderer(plan.Checks),
 			ProviderSchemas:       jsonprovider.MarshalForRenderer(schemas),
 			RelevantAttributes:    attrs,
 		}

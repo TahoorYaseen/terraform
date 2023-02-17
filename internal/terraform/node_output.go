@@ -347,7 +347,7 @@ func (n *NodeApplyableOutput) Execute(ctx EvalContext, op walkOperation) (diags 
 		// This has to run before we have a state lock, since evaluation also
 		// reads the state
 		var evalDiags tfdiags.Diagnostics
-		val, evalDiags = ctx.EvaluateExpr(n.Config.Expr, cty.DynamicPseudoType, nil)
+		val, evalDiags = ctx.EvaluateExpr(n.Config.Expr, cty.DynamicPseudoType, nil, nil)
 		diags = diags.Append(evalDiags)
 
 		// We'll handle errors below, after we have loaded the module.

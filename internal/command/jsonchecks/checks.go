@@ -8,24 +8,21 @@ import (
 	"github.com/hashicorp/terraform/internal/states"
 )
 
-// MarshalCheckStates is the main entry-point for this package, which takes
-// the top-level model object for checks in state and plan, and returns a
-// JSON representation of it suitable for use in public integration points.
-func MarshalCheckStates(results *states.CheckResults) []byte {
-	jsonResults := make([]checkResultStatic, 0, results.ConfigResults.Len())
+func MarshalForRenderer(results *states.CheckResults) []CheckResultStatic {
+	jsonResults := make([]CheckResultStatic, 0, results.ConfigResults.Len())
 
 	for _, elem := range results.ConfigResults.Elems {
 		staticAddr := elem.Key
 		aggrResult := elem.Value
 
-		objects := make([]checkResultDynamic, 0, aggrResult.ObjectResults.Len())
+		objects := make([]CheckResultDynamic, 0, aggrResult.ObjectResults.Len())
 		for _, elem := range aggrResult.ObjectResults.Elems {
 			dynamicAddr := elem.Key
 			result := elem.Value
 
-			problems := make([]checkProblem, 0, len(result.FailureMessages))
+			problems := make([]CheckProblem, 0, len(result.FailureMessages))
 			for _, msg := range result.FailureMessages {
-				problems = append(problems, checkProblem{
+				problems = append(problems, CheckProblem{
 					Message: msg,
 				})
 			}
@@ -33,7 +30,7 @@ func MarshalCheckStates(results *states.CheckResults) []byte {
 				return problems[i].Message < problems[j].Message
 			})
 
-			objects = append(objects, checkResultDynamic{
+			objects = append(objects, CheckResultDynamic{
 				Address:  makeDynamicObjectAddr(dynamicAddr),
 				Status:   checkStatusForJSON(result.Status),
 				Problems: problems,
@@ -44,7 +41,7 @@ func MarshalCheckStates(results *states.CheckResults) []byte {
 			return objects[i].Address["to_display"].(string) < objects[j].Address["to_display"].(string)
 		})
 
-		jsonResults = append(jsonResults, checkResultStatic{
+		jsonResults = append(jsonResults, CheckResultStatic{
 			Address:   makeStaticObjectAddr(staticAddr),
 			Status:    checkStatusForJSON(aggrResult.Status),
 			Instances: objects,
@@ -55,7 +52,14 @@ func MarshalCheckStates(results *states.CheckResults) []byte {
 		return jsonResults[i].Address["to_display"].(string) < jsonResults[j].Address["to_display"].(string)
 	})
 
-	ret, err := json.Marshal(jsonResults)
+	return jsonResults
+}
+
+// Marshal is the main entry-point for this package, which takes
+// the top-level model object for checks in state and plan, and returns a
+// JSON representation of it suitable for use in public integration points.
+func Marshal(results *states.CheckResults) []byte {
+	ret, err := json.Marshal(MarshalForRenderer(results))
 	if err != nil {
 		// We totally control the input to json.Marshal, so any error here
 		// is a bug in the code above.
@@ -64,36 +68,36 @@ func MarshalCheckStates(results *states.CheckResults) []byte {
 	return ret
 }
 
-// checkResultStatic is the container for the static, configuration-driven
+// CheckResultStatic is the container for the static, configuration-driven
 // idea of "checkable object" -- a resource block with conditions, for example --
 // which ensures that we can always say _something_ about each checkable
 // object in the configuration even if Terraform Core encountered an error
 // before being able to determine the dynamic instances of the checkable object.
-type checkResultStatic struct {
+type CheckResultStatic struct {
 	ExperimentalNote experimentalNote `json:"//"`
 
 	// Address is the address of the checkable object this result relates to.
-	Address staticObjectAddr `json:"address"`
+	Address StaticObjectAddr `json:"address"`
 
 	// Status is the aggregate status for all of the dynamic objects belonging
 	// to this static object.
-	Status checkStatus `json:"status"`
+	Status CheckStatus `json:"status"`
 
 	// Instances contains the results for each individual dynamic object that
 	// belongs to this static object.
-	Instances []checkResultDynamic `json:"instances,omitempty"`
+	Instances []CheckResultDynamic `json:"instances,omitempty"`
 }
 
-// checkResultDynamic describes the check result for a dynamic object, which
+// CheckResultDynamic describes the check result for a dynamic object, which
 // results from Terraform Core evaluating the "expansion" (e.g. count or for_each)
 // of the containing object or its own containing module(s).
-type checkResultDynamic struct {
-	// Address augments the Address of the containing checkResultStatic with
+type CheckResultDynamic struct {
+	// Address augments the Address of the containing CheckResultStatic with
 	// instance-specific extra properties or overridden properties.
-	Address dynamicObjectAddr `json:"address"`
+	Address DynamicObjectAddr `json:"address"`
 
 	// Status is the status for this specific dynamic object.
-	Status checkStatus `json:"status"`
+	Status CheckStatus `json:"status"`
 
 	// Problems describes some optional details associated with a failure
 	// status, describing what fails.
@@ -103,12 +107,12 @@ type checkResultDynamic struct {
 	// particular object has a mixture of conditions that failed and conditions
 	// that were invalid then status can be "error" while simultaneously
 	// returning problems in this property.
-	Problems []checkProblem `json:"problems,omitempty"`
+	Problems []CheckProblem `json:"problems,omitempty"`
 }
 
-// checkProblem describes one of potentially several problems that led to
+// CheckProblem describes one of potentially several problems that led to
 // a check being classified as status "fail".
-type checkProblem struct {
+type CheckProblem struct {
 	// Message is the condition error message provided by the author.
 	Message string `json:"message"`
 

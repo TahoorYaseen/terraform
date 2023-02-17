@@ -151,7 +151,7 @@ func (n *NodeLocal) Execute(ctx EvalContext, op walkOperation) (diags tfdiags.Di
 		return diags
 	}
 
-	val, moreDiags := ctx.EvaluateExpr(expr, cty.DynamicPseudoType, nil)
+	val, moreDiags := ctx.EvaluateExpr(expr, cty.DynamicPseudoType, nil, nil)
 	diags = diags.Append(moreDiags)
 	if moreDiags.HasErrors() {
 		return diags

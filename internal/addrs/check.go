@@ -3,6 +3,7 @@ package addrs
 import "fmt"
 
 type Check struct {
+	referenceable
 	Name string
 }
 
@@ -28,7 +29,14 @@ func (c Check) Equal(o Check) bool {
 	return c.Name == o.Name
 }
 
+func (c Check) UniqueKey() UniqueKey {
+	return c // A Check is its own UniqueKey
+}
+
+func (c Check) uniqueKeySigil() {}
+
 type ConfigCheck struct {
+	targetable
 	Module Module
 	Check  Check
 }
@@ -53,6 +61,7 @@ func (c ConfigCheck) String() string {
 }
 
 type AbsCheck struct {
+	targetable
 	Module    ModuleInstance
 	CheckAddr Check
 }

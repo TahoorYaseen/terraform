@@ -20,6 +20,14 @@ type Scope struct {
 	// or nil if the "self" object should not be available at all.
 	SelfAddr addrs.Referenceable
 
+	// SourceAddr is the address of the source block that the scope is
+	// originating from. This maybe the same as SelfAddr, but is used to check
+	// references that are only available within certain blocks.
+	//
+	// If SourceAddr is nil, then the scope is assumed to have the same access
+	// as objects defined at the root level of the module.
+	SourceAddr addrs.Referenceable
+
 	// BaseDir is the base directory used by any interpolation functions that
 	// accept filesystem paths as arguments.
 	BaseDir string

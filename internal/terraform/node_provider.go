@@ -73,7 +73,7 @@ func (n *NodeApplyableProvider) ValidateProvider(ctx EvalContext, provider provi
 		configSchema = &configschema.Block{}
 	}
 
-	configVal, _, evalDiags := ctx.EvaluateBlock(configBody, configSchema, nil, EvalDataForNoInstanceKey)
+	configVal, _, evalDiags := ctx.EvaluateBlock(configBody, configSchema, nil, nil, EvalDataForNoInstanceKey)
 	if evalDiags.HasErrors() {
 		return diags.Append(evalDiags)
 	}
@@ -108,7 +108,7 @@ func (n *NodeApplyableProvider) ConfigureProvider(ctx EvalContext, provider prov
 	}
 
 	configSchema := resp.Provider.Block
-	configVal, configBody, evalDiags := ctx.EvaluateBlock(configBody, configSchema, nil, EvalDataForNoInstanceKey)
+	configVal, configBody, evalDiags := ctx.EvaluateBlock(configBody, configSchema, nil, nil, EvalDataForNoInstanceKey)
 	diags = diags.Append(evalDiags)
 	if evalDiags.HasErrors() {
 		return diags
